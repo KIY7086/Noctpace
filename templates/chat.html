@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>聊天 - Noctpace</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/chat.css">
+    <script>
+        const currentUserId = "{{.user_id}}";
+        const currentUsername = "{{.username}}";
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        {{template "navbar" .}}
+        
+        <main class="main-content">
+            <div class="chat-container">
+                <div class="user-list">
+                    <div class="user-list-header">
+                        <div class="user-list-search">
+                            <i class="fas fa-search"></i>
+                            <input type="text" placeholder="搜索聊天...">
+                        </div>
+                    </div>
+                    
+                    <div class="chat-list">
+                        <div class="chat-list-section">
+                            <div class="section-title">公共聊天室</div>
+                            <div class="public-room active-room" onclick="joinPublicRoom()">
+                                <div class="room-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="room-info">
+                                    <div class="room-name">公共大厅</div>
+                                    <div class="room-meta">
+                                        <span class="online-count">-</span> 在线
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="chat-list-section">
+                            <div class="section-title">私人聊天</div>
+                            <div id="users">
+                                <!-- 用户列表将通过JavaScript动态插入 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chat-area" id="chatArea">
+                    <div class="messages" id="messages">
+                        <template id="message-template">
+                            <div class="message">
+                                <div class="message-header">
+                                    <span class="message-time"></span>
+                                    <span class="message-sender"></span>
+                                </div>
+                                <div class="message-content"></div>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <form class="message-form" id="messageForm" onsubmit="return false;">
+                        <input type="text" id="messageInput" placeholder="输入消息...">
+                        <button type="submit">
+                            <i class="fas fa-paper-plane"></i>
+                            <span>发送</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="/static/js/websocket.js"></script>
+    <script src="/static/js/chat.js"></script>
+    <script src="/static/js/users.js"></script>
+</body>
+</html> 
