@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>注册 - Noctpace</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/common.css">
@@ -8,30 +10,34 @@
 </head>
 <body>
     <div class="auth-container">
-        <div class="auth-card">
+        <div class="auth-content">
             <div class="auth-header">
-                <img src="/static/images/logo.png" alt="Noctpace" style="height: 40px; margin-bottom: 1.5rem;">
-                <h2>注册</h2>
+                <img src="/static/images/logo.png" alt="Noctpace" class="logo">
+                <h2>创建新账号</h2>
             </div>
             {{if .error}}
             <div class="error-message">{{.error}}</div>
             {{end}}
+            {{if .success}}
+            <div class="success-message">{{.success}}</div>
+            {{end}}
             <form method="POST" action="/register" class="auth-form">
                 <div>
-                    <input type="text" name="username" placeholder="用户名" required>
+                    <input type="text" name="username" placeholder="用户名" required autocomplete="username">
                 </div>
                 <div>
-                    <input type="password" name="password" placeholder="密码" required>
+                    <input type="password" name="password" placeholder="密码" required autocomplete="new-password">
                 </div>
                 <div>
-                    <input type="password" name="confirm_password" placeholder="确认密码" required>
+                    <input type="password" name="confirm_password" placeholder="确认密码" required autocomplete="new-password">
                 </div>
                 <button type="submit">注册</button>
             </form>
-            <p style="text-align: center; margin-top: 1.5rem; color: var(--text-secondary);">
-                已有账号？<a href="/" style="color: var(--primary-color); text-decoration: none;">立即登录</a>
-            </p>
+            <div class="auth-footer">
+                <p>已有账号？<a href="/">立即登录</a></p>
+            </div>
         </div>
     </div>
 </body>
-</html> 
+</html>
+
