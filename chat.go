@@ -2,7 +2,14 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -316,12 +323,20 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 		}
 
 		rows, err := db.Query(`
-			SELECT u.id, u.username, f.created_at
-			FROM friendships f
-			JOIN users u ON f.friend_id = u.id
-			WHERE f.user_id = ? AND f.status = 'accepted'
+			SELECT DISTINCT u.id, u.username, f.created_at, COALESCE(u.avatar, '') as avatar
+			FROM users u
+			JOIN friendships f ON 
+				(f.user_id = ? AND f.friend_id = u.id) OR 
+				(f.friend_id = ? AND f.user_id = u.id)
+			WHERE f.status = 'accepted'
+				AND NOT EXISTS (
+					SELECT 1 FROM friendships f2
+					WHERE ((f2.user_id = ? AND f2.friend_id = u.id) OR 
+						  (f2.friend_id = ? AND f2.user_id = u.id))
+					AND f2.status = 'rejected'
+				)
 			ORDER BY u.username`,
-			userID)
+			userID, userID, userID, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, []gin.H{})
 			return
@@ -331,15 +346,17 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 		friends := []gin.H{}
 		for rows.Next() {
 			var id int
-			var username, createdAt string
-			if err := rows.Scan(&id, &username, &createdAt); err != nil {
+			var username, createdAt, avatar string
+			if err := rows.Scan(&id, &username, &createdAt, &avatar); err != nil {
 				c.JSON(http.StatusInternalServerError, []gin.H{})
 				return
 			}
+
 			friends = append(friends, gin.H{
 				"id":         id,
 				"username":   username,
 				"created_at": createdAt,
+				"avatar":     avatar,
 			})
 		}
 
@@ -519,5 +536,197 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 		}
 
 		c.JSON(http.StatusOK, users)
+	})
+
+	// 获取用户信息
+	r.GET("/api/user/profile", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		var username string
+		var email, avatar sql.NullString
+		err := db.QueryRow("SELECT username, email, avatar FROM users WHERE id = ?", userID).Scan(&username, &email, &avatar)
+		if err != nil {
+			log.Printf("数据库查询错误: %v", err)
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("获取用户信息失败: %v", err)})
+			return
+		}
+
+		emailValue := ""
+		if email.Valid {
+			emailValue = email.String
+		}
+
+		avatarValue := "" // 空字符串表示使用默认图标
+		if avatar.Valid && avatar.String != "" {
+			avatarValue = avatar.String
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"username": username,
+			"email":    emailValue,
+			"avatar":   avatarValue,
+		})
+	})
+
+	// 更新用户信息
+	r.POST("/api/user/profile", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		email := c.PostForm("email")
+
+		// 验证邮箱格式
+		if email != "" {
+			emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+			if !emailRegex.MatchString(email) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "邮箱格式不正确"})
+				return
+			}
+		}
+
+		// 如果邮箱为空字符串，则设置为 NULL
+		var err error
+		if email == "" {
+			_, err = db.Exec("UPDATE users SET email = NULL WHERE id = ?", userID)
+		} else {
+			_, err = db.Exec("UPDATE users SET email = ? WHERE id = ?", email, userID)
+		}
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新用户信息失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "用户信息已更新"})
+	})
+
+	// 上传头像
+	r.POST("/api/user/avatar", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		// 获取上传的文件
+		file, err := c.FormFile("avatar")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择要上传的图片"})
+			return
+		}
+
+		// 验证文件类型
+		if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "只能上传图片文"})
+			return
+		}
+
+		// 生成文件名
+		ext := filepath.Ext(file.Filename)
+		filename := fmt.Sprintf("avatar_%v_%d%s", userID, time.Now().Unix(), ext)
+		filePath := filepath.Join("static", "uploads", "avatars", filename)
+
+		// 确保目录存在
+		os.MkdirAll(filepath.Dir(filePath), 0755)
+
+		// 保存文件
+		if err := c.SaveUploadedFile(file, filePath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存头像失败"})
+			return
+		}
+
+		// 更新数据库中的头像路径
+		_, err = db.Exec("UPDATE users SET avatar = ? WHERE id = ?", "/"+filePath, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新头像信息失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "头像已更新",
+			"avatar":  "/" + filePath,
+		})
+	})
+
+	// 获取聊天列表
+	r.GET("/api/chat-list", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		// 修改 SQL 查询，只获取与好友的私聊
+		rows, err := db.Query(`
+			SELECT DISTINCT r.id, r.name, r.type, r.created_at,
+				CASE 
+					WHEN r.type = 'private' THEN (
+						SELECT username 
+						FROM users u2 
+						WHERE u2.id IN (
+							SELECT user_id 
+							FROM room_members 
+							WHERE room_id = r.id AND user_id != ?
+						)
+					)
+					ELSE r.name 
+				END as display_name
+			FROM rooms r
+			JOIN room_members rm ON r.id = rm.room_id
+			LEFT JOIN friendships f ON 
+				(f.user_id = ? AND f.friend_id = (
+					SELECT user_id 
+					FROM room_members 
+					WHERE room_id = r.id AND user_id != ?
+				))
+				OR 
+				(f.friend_id = ? AND f.user_id = (
+					SELECT user_id 
+					FROM room_members 
+					WHERE room_id = r.id AND user_id != ?
+				))
+			WHERE rm.user_id = ? 
+			AND (r.type = 'public' OR (r.type = 'private' AND f.status = 'accepted'))
+			ORDER BY r.updated_at DESC`,
+			userID, userID, userID, userID, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取聊天列表失败"})
+			return
+		}
+		defer rows.Close()
+
+		var rooms []gin.H
+		for rows.Next() {
+			var id int
+			var name, roomType, createdAt, displayName string
+			if err := rows.Scan(&id, &name, &roomType, &createdAt, &displayName); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "读取聊天列表失败"})
+				return
+			}
+			rooms = append(rooms, gin.H{
+				"id":           id,
+				"name":         name,
+				"type":         roomType,
+				"created_at":   createdAt,
+				"display_name": displayName,
+			})
+		}
+
+		c.JSON(http.StatusOK, rooms)
 	})
 }

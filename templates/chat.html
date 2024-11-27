@@ -17,6 +17,7 @@
         
         <main class="main-content">
             <div class="chat-container">
+                <div class="chat-overlay"></div>
                 <div class="user-list">
                     <div class="user-list-header">
                         <div class="user-list-search">
@@ -34,9 +35,6 @@
                                 </div>
                                 <div class="room-info">
                                     <div class="room-name">公共大厅</div>
-                                    <div class="room-meta">
-                                        <span class="online-count">-</span> 在线
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -51,6 +49,18 @@
                 </div>
                 
                 <div class="chat-area" id="chatArea">
+                    <div class="chat-header">
+                        <div class="header-left">
+                            <i class="fas fa-bars menu-toggle"></i>
+                            <div class="current-chat-info">
+                                <h2 class="chat-title">公共大厅</h2>
+                                <div class="chat-status">
+                                    <span class="status-indicator"></span>
+                                    <span class="online-count">-</span> 在线
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="messages" id="messages">
                         <template id="message-template">
                             <div class="message">

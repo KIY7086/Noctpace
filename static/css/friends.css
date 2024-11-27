@@ -248,9 +248,8 @@
     }
 
     .section-header {
-        flex-direction: column;
+        flex-direction: row;
         gap: 12px;
-        align-items: stretch;
     }
 
     .search-box {

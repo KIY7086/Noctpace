@@ -16,9 +16,11 @@ func initDB() *sql.DB {
 	// 创建用户表
 	db.Exec(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        salt TEXT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        email TEXT,
+        avatar TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`)
 

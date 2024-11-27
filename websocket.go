@@ -22,9 +22,13 @@ var (
 	rooms      = make(map[string][]*websocket.Conn)
 	roomsMutex sync.RWMutex
 
-	// 新增：用户在线状态管理
-	onlineUsers      = make(map[string]bool)
-	onlineUsersMutex sync.RWMutex
+	// 用于跟踪用户在线状态
+	userConnections = make(map[string]map[string]*websocket.Conn) // map[userID]map[roomID]*websocket.Conn
+	userMutex       sync.RWMutex
+
+	// 每个房间的在线人数
+	roomOnlineCount = make(map[string]int)
+	roomCountMutex  sync.RWMutex
 )
 
 type Message struct {
@@ -45,16 +49,31 @@ func broadcastToRoom(roomID string, message Message) {
 			err := conn.WriteJSON(message)
 			if err != nil {
 				log.Printf("发送消息失败: %v", err)
+				continue
 			}
 		}
 	}
 }
 
-// 新增：获取在线用户数量
-func getOnlineUsersCount() int {
-	onlineUsersMutex.RLock()
-	defer onlineUsersMutex.RUnlock()
-	return len(onlineUsers)
+// 更新房间在线人数
+func updateRoomOnlineCount(roomID string) {
+	roomCountMutex.Lock()
+	defer roomCountMutex.Unlock()
+
+	roomsMutex.RLock()
+	count := len(rooms[roomID])
+	roomsMutex.RUnlock()
+
+	roomOnlineCount[roomID] = count
+
+	// 广播新的在线人数
+	message := Message{
+		Type:        "online_count",
+		RoomID:      roomID,
+		OnlineCount: count,
+		Timestamp:   time.Now().Format("2006-01-02 15:04:05"),
+	}
+	broadcastToRoom(roomID, message)
 }
 
 func setupWebSocket(r *gin.Engine, db *sql.DB) {
@@ -64,14 +83,26 @@ func setupWebSocket(r *gin.Engine, db *sql.DB) {
 		username := c.Query("username")
 
 		// 验证用户权限并获取房间信息
-		var roomName string
+		var roomName, roomType string
+		var targetUsername sql.NullString
 		err := db.QueryRow(`
-            SELECT r.name 
+            SELECT r.name, r.type,
+                CASE 
+                    WHEN r.type = 'private' THEN (
+                        SELECT u.username 
+                        FROM users u 
+                        JOIN room_members rm ON u.id = rm.user_id 
+                        WHERE rm.room_id = r.id AND rm.user_id != ?
+                    )
+                    ELSE NULL 
+                END as target_username
             FROM chat_rooms r 
             JOIN room_members rm ON r.id = rm.room_id 
             WHERE r.id = ? AND rm.user_id = ?`,
-			roomID, userID).Scan(&roomName)
+			userID, roomID, userID).Scan(&roomName, &roomType, &targetUsername)
+
 		if err != nil {
+			log.Printf("查询房间信息失败: %v", err)
 			c.String(http.StatusForbidden, "无权访问此聊天室")
 			return
 		}
@@ -82,6 +113,14 @@ func setupWebSocket(r *gin.Engine, db *sql.DB) {
 			return
 		}
 
+		// 添加用户连接记录
+		userMutex.Lock()
+		if userConnections[userID] == nil {
+			userConnections[userID] = make(map[string]*websocket.Conn)
+		}
+		userConnections[userID][roomID] = conn
+		userMutex.Unlock()
+
 		// 将连接添加到房间
 		roomsMutex.Lock()
 		if _, exists := rooms[roomID]; !exists {
@@ -90,15 +129,121 @@ func setupWebSocket(r *gin.Engine, db *sql.DB) {
 		rooms[roomID] = append(rooms[roomID], conn)
 		roomsMutex.Unlock()
 
-		// 用户上线
-		onlineUsersMutex.Lock()
-		onlineUsers[userID] = true
-		onlineUsersMutex.Unlock()
-		broadcastOnlineCount()
+		// 更新并广播在线人数
+		updateRoomOnlineCount(roomID)
 
-		// 在函数返回时清理连接
+		// 发送房间信息
+		if targetUsername.Valid {
+			// 私聊房间
+			isOnline := false
+			userMutex.RLock()
+			for uid, conns := range userConnections {
+				if uid != userID && len(conns) > 0 {
+					isOnline = true
+					break
+				}
+			}
+			userMutex.RUnlock()
+
+			roomInfo := Message{
+				Type:        "room_info",
+				RoomID:      roomID,
+				Content:     roomName,
+				Username:    targetUsername.String,
+				OnlineCount: map[bool]int{true: 2, false: 1}[isOnline],
+			}
+			conn.WriteJSON(roomInfo)
+		} else {
+			// 公共房间
+			roomInfo := Message{
+				Type:        "room_info",
+				RoomID:      roomID,
+				Content:     roomName,
+				OnlineCount: len(rooms[roomID]),
+			}
+			conn.WriteJSON(roomInfo)
+		}
+
+		// 发送房间信息后，加载并发送历史消息
+		rows, err := db.Query(`
+            SELECT pm.content, u.username, pm.created_at 
+            FROM private_messages pm
+            JOIN users u ON pm.user_id = u.id
+            WHERE pm.room_id = ?
+            ORDER BY pm.created_at ASC
+            LIMIT 100`, // 限制加载最近的100条消息
+			roomID)
+
+		if err != nil {
+			log.Printf("加载历史消息失败: %v", err)
+		} else {
+			defer rows.Close()
+
+			for rows.Next() {
+				var content, msgUsername, timestamp string
+				if err := rows.Scan(&content, &msgUsername, &timestamp); err != nil {
+					log.Printf("读取历史消息失败: %v", err)
+					continue
+				}
+
+				historyMsg := Message{
+					Type:      "message",
+					Content:   content,
+					RoomID:    roomID,
+					Username:  msgUsername,
+					Timestamp: timestamp,
+				}
+
+				if err := conn.WriteJSON(historyMsg); err != nil {
+					log.Printf("发送历史消息失败: %v", err)
+				}
+			}
+		}
+
+		// 消息处理循环
+		for {
+			var msg Message
+			err := conn.ReadJSON(&msg)
+			if err != nil {
+				log.Printf("读取消息失败: %v", err)
+				break
+			}
+
+			// 确保消息包含正确的信息
+			msg.RoomID = roomID
+			msg.Username = username
+			msg.Timestamp = time.Now().Format("2006-01-02 15:04:05")
+			msg.Type = "message"
+
+			// 存储消息 - 修改为使用 private_messages 表
+			_, err = db.Exec(`
+                INSERT INTO private_messages (room_id, user_id, content, created_at) 
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+				roomID, userID, msg.Content)
+			if err != nil {
+				log.Printf("存储消息失败: %v", err)
+				continue
+			}
+
+			// 广播消息给房间内所有用户
+			broadcastToRoom(roomID, msg)
+		}
+
+		// 清理连接
 		defer func() {
 			conn.Close()
+
+			// 移除用户连接记录
+			userMutex.Lock()
+			if conns, exists := userConnections[userID]; exists {
+				delete(conns, roomID)
+				if len(conns) == 0 {
+					delete(userConnections, userID)
+				}
+			}
+			userMutex.Unlock()
+
+			// 从房间移除连接
 			roomsMutex.Lock()
 			if conns, exists := rooms[roomID]; exists {
 				newConns := make([]*websocket.Conn, 0)
@@ -114,94 +259,9 @@ func setupWebSocket(r *gin.Engine, db *sql.DB) {
 				}
 			}
 			roomsMutex.Unlock()
-			onlineUsersMutex.Lock()
-			delete(onlineUsers, userID)
-			onlineUsersMutex.Unlock()
-			broadcastOnlineCount()
+
+			// 更新并广播新的在线人数
+			updateRoomOnlineCount(roomID)
 		}()
-
-		log.Printf("新WebSocket连接: 房间=%s(%s), 用户=%s", roomName, roomID, username)
-
-		// 发送历史消息，按时间正序排列
-		rows, err := db.Query(`
-            SELECT pm.content, u.username, pm.created_at 
-            FROM private_messages pm 
-            JOIN users u ON pm.user_id = u.id 
-            WHERE pm.room_id = ?
-            ORDER BY pm.created_at ASC
-            LIMIT 50`,
-			roomID)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var content, msgUsername, createdAt string
-				if err := rows.Scan(&content, &msgUsername, &createdAt); err == nil {
-					msg := Message{
-						Type:      "message",
-						Content:   content,
-						Username:  msgUsername,
-						Timestamp: createdAt,
-						RoomID:    roomID, // 添加房间ID
-					}
-					conn.WriteJSON(msg)
-				}
-			}
-		}
-
-		// 消息处理循环
-		for {
-			var msg Message
-			err := conn.ReadJSON(&msg)
-			if err != nil {
-				log.Printf("读取消息错误: %v", err)
-				break
-			}
-
-			// 确保消息发送到正确的房间
-			msg.RoomID = roomID
-
-			// 存储消息
-			_, err = db.Exec(`
-                INSERT INTO private_messages (room_id, user_id, content, created_at) 
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
-				roomID, userID, msg.Content)
-			if err != nil {
-				log.Printf("存储消息失败: %v", err)
-				continue
-			}
-
-			// 广播消息给房间内所有用户
-			response := Message{
-				Type:      "message",
-				Content:   msg.Content,
-				Username:  username,
-				Timestamp: time.Now().Format("2006-01-02 15:04:05"),
-				RoomID:    roomID, // 添加房间ID
-			}
-
-			broadcastToRoom(roomID, response)
-		}
 	})
-}
-
-// 新增：广播在线人数
-func broadcastOnlineCount() {
-	count := getOnlineUsersCount()
-	message := Message{
-		Type:        "online_count",
-		OnlineCount: count,
-		Timestamp:   time.Now().Format("2006-01-02 15:04:05"),
-	}
-
-	roomsMutex.RLock()
-	defer roomsMutex.RUnlock()
-
-	// 向所有连接的客户端广播
-	for _, connections := range rooms {
-		for _, conn := range connections {
-			if err := conn.WriteJSON(message); err != nil {
-				log.Printf("广播在线人数失败: %v", err)
-			}
-		}
-	}
 }

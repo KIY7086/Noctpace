@@ -103,52 +103,85 @@
 }
 
 .settings-form {
-    display: grid;
-    gap: 20px;
-    
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    label {
-        color: var(--text-secondary);
-        font-size: 14px;
-    }
-    
-    input {
-        padding: 12px 16px;
-        border: 1px solid var(--glass-border);
-        border-radius: 8px;
-        transition: all 0.2s ease;
-        background: rgba(255, 255, 255, 0.5);
-        
-        &:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-        }
-    }
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.avatar-upload {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.avatar-preview {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 16px;
+    border-radius: 60px;
+    overflow: hidden;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    background: var(--glass-bg);
+}
+
+.avatar-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.default-avatar {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color);
+    color: white;
+    font-size: 48px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 15px;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    border-width: 1.5px;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 .btn-group {
-    display: flex;
-    gap: 12px;
     margin-top: 24px;
+    text-align: right;
 }
 
 @media (max-width: 768px) {
-    .profile-header {
-        flex-direction: column;
-        text-align: center;
+    .profile-container {
+        padding: 20px;
     }
     
-    .profile-avatar {
-        margin: 0 auto;
+    .profile-settings {
+        padding: 20px;
     }
     
     .btn-group {
-        flex-direction: column;
+        text-align: center;
     }
 }

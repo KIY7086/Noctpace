@@ -13,49 +13,33 @@
         
         <main class="main-content">
             <div class="profile-container">
-                <div class="profile-header">
-                    <div class="profile-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <div class="profile-info">
-                        <h2>{{.username}}</h2>
-                        <p>用户ID: {{.user_id}}</p>
-                        <button class="btn btn-primary">
-                            <i class="fas fa-edit"></i> 编辑资料
-                        </button>
-                    </div>
-                </div>
-
-                <div class="profile-stats">
-                    <div class="stat-card">
-                        <h3>128</h3>
-                        <p>发送消息</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>32</h3>
-                        <p>活跃天数</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>96%</h3>
-                        <p>在线率</p>
-                    </div>
-                </div>
-
                 <div class="profile-settings">
                     <div class="settings-section">
-                        <h3>账号设置</h3>
-                        <form class="settings-form">
+                        <form class="settings-form" id="profileForm">
+                            <div class="avatar-upload">
+                                <div class="avatar-preview">
+                                    <img id="avatarPreview" style="display: none;">
+                                    <div class="default-avatar">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                </div>
+                                <div class="avatar-edit">
+                                    <input type="file" id="avatarInput" accept="image/*" style="display: none">
+                                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('avatarInput').click()">
+                                        <i class="fas fa-camera"></i> 更换头像
+                                    </button>
+                                </div>
+                            </div>
                             <div class="form-group">
                                 <label>用户名</label>
-                                <input type="text" value="{{.username}}" placeholder="输入新的用户名">
+                                <input type="text" value="{{.username}}" readonly>
                             </div>
                             <div class="form-group">
                                 <label>邮箱</label>
-                                <input type="email" placeholder="设置邮箱地址">
+                                <input type="email" name="email" id="emailInput" placeholder="设置邮箱地址">
                             </div>
                             <div class="btn-group">
                                 <button type="submit" class="btn btn-primary">保存更改</button>
-                                <button type="button" class="btn btn-secondary">取消</button>
                             </div>
                         </form>
                     </div>
@@ -63,5 +47,6 @@
             </div>
         </main>
     </div>
+    <script src="/static/js/profile.js"></script>
 </body>
 </html>

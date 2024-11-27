@@ -1,11 +1,13 @@
 let currentRoomId = null;
 let currentTargetUser = null;
+let currentTargetAvatar = null;
 
 // 保存聊天状态到 LocalStorage
 function saveChatState() {
     const chatState = {
         roomId: currentRoomId,
         targetUser: currentTargetUser,
+        targetAvatar: currentTargetAvatar,
         isPublicRoom: currentTargetUser === "公共大厅"
     };
     localStorage.setItem('chatState', JSON.stringify(chatState));
@@ -17,10 +19,27 @@ function restoreChatState() {
     const savedState = localStorage.getItem('chatState');
     if (savedState) {
         const chatState = JSON.parse(savedState);
+        console.log('恢复聊天状态:', chatState);
+        
         if (chatState.isPublicRoom) {
             joinPublicRoom(false);
+        } else if (chatState.targetUser && chatState.targetUser !== "公共大厅") {
+            // 立即更新标题
+            updateChatHeader(chatState.targetUser);
+            
+            // 恢复私聊状态
+            currentRoomId = chatState.roomId;
+            currentTargetUser = chatState.targetUser;
+            currentTargetAvatar = chatState.targetAvatar;
+            
+            // 连接 WebSocket
+            connectWebSocket(chatState.roomId);
+            
+            // 更新 UI 状态
+            $('.active-room').removeClass('active-room');
+            $('.user-item').removeClass('active-user');
+            $(`.user-item[data-user-id="${chatState.roomId}"]`).addClass('active-user');
         }
-        // 如果是私聊，会在loadUsers完成后处理
     } else {
         joinPublicRoom(false);
     }
@@ -46,6 +65,19 @@ function sendMessage() {
     messageInput.value = '';
 }
 
+function updateChatHeader(title, onlineCount) {
+    const titleElement = document.querySelector('.chat-title');
+    const onlineCountElement = document.querySelector('.chat-status .online-count');
+    
+    if (titleElement) {
+        titleElement.textContent = title;
+    }
+    
+    if (onlineCount !== undefined && onlineCountElement) {
+        onlineCountElement.textContent = onlineCount;
+    }
+}
+
 function joinPublicRoom(saveState = true) {
     $('.active-room').removeClass('active-room');
     $('.user-item').removeClass('active-user');
@@ -63,6 +95,8 @@ function joinPublicRoom(saveState = true) {
     if (saveState) {
         saveChatState();
     }
+
+    updateChatHeader("公共大厅", "-");
 }
 
 function renderMessage(message) {
@@ -70,9 +104,17 @@ function renderMessage(message) {
     const messageElement = template.content.cloneNode(true);
     const messageDiv = messageElement.querySelector('.message');
     
-    // 设置消息样式
+    // 设置消息样式和头像
+    const avatarContainer = messageDiv.querySelector('.message-avatar');
     if (message.sender_id === currentUserId) {
         messageDiv.classList.add('self');
+        avatarContainer.innerHTML = currentUserAvatar ? 
+            `<img src="${currentUserAvatar}" alt="我">` : 
+            `<i class="fas fa-user"></i>`;
+    } else {
+        avatarContainer.innerHTML = currentTargetAvatar ? 
+            `<img src="${currentTargetAvatar}" alt="${message.sender_name}">` : 
+            `<i class="fas fa-user"></i>`;
     }
     
     // 设置发送者名称
@@ -88,8 +130,6 @@ function renderMessage(message) {
         time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     
     document.querySelector('#messages').appendChild(messageElement);
-    
-    // 滚动到最新消息
     messageDiv.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -115,27 +155,66 @@ $(document).ready(function() {
     restoreChatState();
 
     // 添加移动端菜单切换
-    document.querySelector('.menu-toggle')?.addEventListener('click', () => {
-        document.querySelector('.user-list').classList.toggle('active');
+    $(document).on('click', '.menu-toggle', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('菜单按钮被点击'); // 调试日志
+        $('.user-list').toggleClass('active');
+        $('.chat-overlay').toggleClass('active');
+        $('body').toggleClass('menu-open');
     });
 
-    // 页面加载完成后绑定事件
-    document.addEventListener('DOMContentLoaded', function() {
-        // 处理表单提交（包括回车和点击发送按钮）
-        const messageForm = document.querySelector('.message-form');
-        const messageInput = document.getElementById('messageInput');
-
-        messageForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            sendMessage();
-        });
-
-        // 处理回车键发送
-        messageInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
+    // 点击遮罩层关闭菜单
+    $('.chat-overlay').on('click', function() {
+        closeUserList();
     });
-}); 
+
+    // ESC 键关闭菜单
+    $(document).on('keyup', function(e) {
+        if (e.key === "Escape") {
+            closeUserList();
+        }
+    });
+});
+
+// 关闭用户列表
+function closeUserList() {
+    $('.user-list').removeClass('active');
+    $('.chat-overlay').removeClass('active');
+    $('body').removeClass('menu-open');
+}
+
+// 在开始新的聊天时自动关闭菜单（在移动端）
+function startChat(userId, username, avatar, saveState = true) {
+    $('.active-room').removeClass('active-room');
+    $('.user-item').removeClass('active-user');
+    
+    currentRoomId = userId;
+    currentTargetUser = username;
+    currentTargetAvatar = avatar;
+    
+    $(`#user-${userId}`).addClass('active-user');
+    $('#chatArea').show();
+    
+    console.log('开始私聊，目标用户:', username, '房间ID:', userId);
+    connectWebSocket(userId);
+    
+    // 更新聊天标题为私聊对象的用户名
+    updateChatHeader(username, "1");
+    
+    saveChatState();
+    
+    // 在移动端自动关闭菜单
+    if (window.innerWidth <= 768) {
+        closeUserList();
+    }
+}
+
+// 在处理 WebSocket 消息时更新在线人数
+function handleWebSocketMessage(event) {
+    const data = JSON.parse(event.data);
+    if (data.type === 'online_count') {
+        document.querySelector('.chat-status .online-count').textContent = data.count;
+    }
+    // ... existing message handling code ...
+} 
