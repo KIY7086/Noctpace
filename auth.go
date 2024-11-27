@@ -10,12 +10,12 @@ import (
 )
 
 func setupAuthRoutes(r *gin.Engine, db *sql.DB) {
-	// 首页路由
+	// 统一认证页面路由
 	r.GET("/", func(c *gin.Context) {
 		session := sessions.Default(c)
 		userID := session.Get("user_id")
 		if userID == nil {
-			c.HTML(http.StatusOK, "login.html", gin.H{
+			c.HTML(http.StatusOK, "auth.html", gin.H{
 				"error": "",
 			})
 			return
@@ -50,7 +50,7 @@ func setupAuthRoutes(r *gin.Engine, db *sql.DB) {
 			username).Scan(&userID, &hashedPassword, &salt)
 
 		if err != nil || !verifyPassword(hashedPassword, password, salt) {
-			c.HTML(http.StatusOK, "login.html", gin.H{
+			c.HTML(http.StatusOK, "auth.html", gin.H{
 				"error": "用户名或密码错误",
 			})
 			return
@@ -58,30 +58,27 @@ func setupAuthRoutes(r *gin.Engine, db *sql.DB) {
 
 		session := sessions.Default(c)
 		session.Set("user_id", userID)
+
 		session.Save()
 
 		c.Redirect(http.StatusFound, "/")
 	})
 
 	// 注册路由
-	r.GET("/register", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "register.html", nil)
-	})
-
 	r.POST("/register", func(c *gin.Context) {
 		username := c.PostForm("username")
 		password := c.PostForm("password")
 		confirmPassword := c.PostForm("confirm_password")
 
 		if password != confirmPassword {
-			c.HTML(http.StatusOK, "register.html", gin.H{
+			c.HTML(http.StatusOK, "auth.html", gin.H{
 				"error": "两次输入的密码不一致",
 			})
 			return
 		}
 
 		if len(password) < 12 {
-			c.HTML(http.StatusOK, "register.html", gin.H{
+			c.HTML(http.StatusOK, "auth.html", gin.H{
 				"error": "密码长度必须至少12位",
 			})
 			return
@@ -89,7 +86,7 @@ func setupAuthRoutes(r *gin.Engine, db *sql.DB) {
 
 		salt, err := generateSalt()
 		if err != nil {
-			c.HTML(http.StatusOK, "register.html", gin.H{
+			c.HTML(http.StatusOK, "auth.html", gin.H{
 				"error": "注册失败，请重试",
 			})
 			return
@@ -103,7 +100,7 @@ func setupAuthRoutes(r *gin.Engine, db *sql.DB) {
 			username, hashedPassword, salt)
 
 		if err != nil {
-			c.HTML(http.StatusOK, "register.html", gin.H{
+			c.HTML(http.StatusOK, "auth.html", gin.H{
 				"error": "注册失败，用户名可能已存在",
 			})
 			return

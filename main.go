@@ -22,9 +22,8 @@ func main() {
 
 	// 设置模板
 	r.LoadHTMLFiles(
+		"templates/auth.html",
 		"templates/chat.html",
-		"templates/login.html",
-		"templates/register.html",
 		"templates/profile.html",
 		"templates/components/navbar.html",
 	)

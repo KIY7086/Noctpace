@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noctpace</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/auth.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.4/gsap.min.js"></script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="light"></div>
+        <div class="auth-content">
+            <div class="auth-logo">
+                <img src="/static/images/logo.png" alt="Noctpace">
+            </div>
+            <div class="auth-main">
+                <div class="auth-forms">
+                    <!-- 登录表单 -->
+                    <form method="POST" action="/login" class="auth-form login-form" id="loginForm">
+                        <div class="auth-header">
+                            <h2>欢迎回来</h2>
+                        </div>
+                        {{if .error}}
+                        <div class="error-message">{{.error}}</div>
+                        {{end}}
+                        {{if .success}}
+                        <div class="success-message">{{.success}}</div>
+                        {{end}}
+                        <div class="form-group">
+                            <i class="fas fa-user"></i>
+                            <input type="text" name="username" placeholder="用户名" required autocomplete="username">
+                        </div>
+                        <div class="form-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" name="password" placeholder="密码" required autocomplete="current-password">
+                        </div>
+                        <button type="submit">登录</button>
+                        <div class="auth-switch">
+                            <p>还没有账号？<a href="#" class="switch-button" data-target="register">立即注册</a></p>
+                        </div>
+                    </form>
+
+                    <!-- 注册表单 -->
+                    <form method="POST" action="/register" class="auth-form register-form" id="registerForm">
+                        <div class="auth-header">
+                            <h2>创建新账号</h2>
+                        </div>
+                        <div class="form-group">
+                            <i class="fas fa-user"></i>
+                            <input type="text" name="username" placeholder="用户名" required autocomplete="username">
+                        </div>
+                        <div class="form-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" name="password" placeholder="密码" required autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" name="confirm_password" placeholder="确认密码" required autocomplete="new-password">
+                        </div>
+                        <button type="submit">注册</button>
+                        <div class="auth-switch">
+                            <p>已有账号？<a href="#" class="switch-button" data-target="login">立即登录</a></p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const authForms = document.querySelector('.auth-forms');
+        let currentForm = 'login';
+
+        // 检查是否为移动端
+        const isMobile = window.innerWidth <= 480;
+
+        if (!isMobile) {
+            // 仅在桌面端初始化 GSAP
+            gsap.set(registerForm, {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                opacity: 0,
+                y: 20,
+                visibility: 'hidden'
+            });
+
+            gsap.set(authForms, {
+                height: loginForm.offsetHeight,
+                position: 'relative',
+                overflow: 'hidden'
+            });
+        }
+
+        function switchForm(target) {
+            if (currentForm === target) return;
+
+            if (isMobile) {
+                // 移动端简单切换显示/隐藏
+                if (target === 'register') {
+                    loginForm.style.display = 'none';
+                    registerForm.style.display = 'block';
+                } else {
+                    registerForm.style.display = 'none';
+                    loginForm.style.display = 'block';
+                }
+            } else {
+                // 桌面端动画保持不变
+                const currentHeight = authForms.offsetHeight;
+                const targetForm = target === 'register' ? registerForm : loginForm;
+                const currentFormEl = target === 'register' ? loginForm : registerForm;
+                
+                gsap.set(targetForm, { visibility: 'visible', opacity: 0 });
+                const targetHeight = targetForm.offsetHeight;
+                
+                if (target === 'register') {
+                    gsap.set(targetForm, { visibility: 'hidden' });
+                }
+
+                const timeline = gsap.timeline();
+                
+                timeline
+                    .set(authForms, { height: currentHeight })
+                    .to(authForms, {
+                        height: targetHeight,
+                        duration: 0.3,
+                        ease: 'power2.inOut'
+                    })
+                    .to(currentFormEl, {
+                        y: -20,
+                        opacity: 0,
+                        duration: 0.3,
+                        ease: 'power2.inOut',
+                        onStart: () => {
+                            targetForm.style.visibility = 'visible';
+                        }
+                    }, '-=0.3')
+                    .fromTo(targetForm, 
+                        { 
+                            y: 20,
+                            opacity: 0
+                        },
+                        {
+                            y: 0,
+                            opacity: 1,
+                            duration: 0.3,
+                            ease: 'power2.out',
+                            onComplete: () => {
+                                currentFormEl.style.visibility = 'hidden';
+                                gsap.set(currentFormEl, { y: 20 });
+                            }
+                        }
+                    );
+            }
+
+            currentForm = target;
+        }
+
+        // 绑定点击事件
+        document.querySelectorAll('.switch-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                switchForm(e.target.dataset.target);
+            });
+        });
+    </script>
+</body>
+</html> 
