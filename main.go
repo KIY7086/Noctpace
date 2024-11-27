@@ -14,7 +14,6 @@ func main() {
 
 	// 添加静态文件支持
 	r.Static("/static", "./static")
-	r.StaticFile("/favicon.ico", "./static/images/favicon.ico")
 
 	// 设置 session
 	store := cookie.NewStore([]byte("secret"))
@@ -24,6 +23,7 @@ func main() {
 	r.LoadHTMLFiles(
 		"templates/auth.html",
 		"templates/chat.html",
+		"templates/friends.html",
 		"templates/profile.html",
 		"templates/components/navbar.html",
 	)

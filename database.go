@@ -51,6 +51,19 @@ func initDB() *sql.DB {
         FOREIGN KEY (user_id) REFERENCES users(id)
     )`)
 
+	// 创建好友关系表
+	db.Exec(`CREATE TABLE IF NOT EXISTS friendships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        friend_id INTEGER,
+        status TEXT DEFAULT 'pending', -- pending, accepted, rejected
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (friend_id) REFERENCES users(id),
+        UNIQUE(user_id, friend_id)
+    )`)
+
 	// 检查公共聊天室是否存在
 	var count int
 	err = db.QueryRow("SELECT COUNT(*) FROM chat_rooms WHERE id = 1").Scan(&count)

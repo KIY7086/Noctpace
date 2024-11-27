@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>好友 - Noctpace</title>
+    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/friends.css">
+</head>
+<body>
+    <div class="app-container">
+        {{template "navbar" .}}
+        
+        <main class="main-content">
+            <div class="friends-container">
+                <!-- 好友请求部分 -->
+                <div class="friend-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-user-plus"></i> 好友请求</h2>
+                        <button class="btn btn-primary" onclick="showAddFriendModal()">
+                            <i class="fas fa-plus"></i> 添加好友
+                        </button>
+                    </div>
+                    <div class="friend-requests" id="friendRequests">
+                        <!-- 好友请求列表将通过JavaScript动态加载 -->
+                    </div>
+                </div>
+
+                <!-- 好友列表部分 -->
+                <div class="friend-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-users"></i> 我的好友</h2>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" placeholder="搜索好友..." id="friendSearch">
+                        </div>
+                    </div>
+                    <div class="friend-list" id="friendList">
+                        <!-- 好友列表将通过JavaScript动态加载 -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加好友模态框 -->
+    <div class="modal" id="addFriendModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加好友</h3>
+                <button class="close-btn" onclick="hideAddFriendModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="search-result" id="searchResult"></div>
+                <div class="form-group">
+                    <input type="text" id="usernameSearch" placeholder="输入用户名搜索">
+                    <button class="btn btn-primary" onclick="searchUser()">搜索</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="/static/js/friends.js"></script>
+</body>
+</html> 

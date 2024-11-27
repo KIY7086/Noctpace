@@ -63,21 +63,43 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 			return
 		}
 
-		// 先查找这两个用户之间是否已经有私聊房间
-		var roomID int64
+		// 检查是否为好友关系
+		var exists bool
 		err := db.QueryRow(`
+            SELECT EXISTS(
+                SELECT 1 FROM friendships 
+                WHERE status = 'accepted'
+                AND ((user_id = ? AND friend_id = ?) 
+                    OR (friend_id = ? AND user_id = ?))
+            )`,
+			userID, targetUserID, userID, targetUserID).Scan(&exists)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "验证好友关系失败"})
+			return
+		}
+
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "只能与好友进行私聊"})
+			return
+		}
+
+		// 查找或创建私聊房间的逻辑保持不变
+		var roomID int64
+		err = db.QueryRow(`
             SELECT r.id 
             FROM chat_rooms r
             JOIN room_members rm1 ON r.id = rm1.room_id
             JOIN room_members rm2 ON r.id = rm2.room_id
-            WHERE r.type = 'private'  -- 添加房间类型区分
-            AND ((rm1.user_id = ? AND rm2.user_id = ?) OR (rm1.user_id = ? AND rm2.user_id = ?))
+            WHERE r.type = 'private'
+            AND ((rm1.user_id = ? AND rm2.user_id = ?) 
+                OR (rm1.user_id = ? AND rm2.user_id = ?))
             GROUP BY r.id
             HAVING COUNT(DISTINCT rm1.user_id) = 2`,
 			userID, targetUserID, targetUserID, userID).Scan(&roomID)
 
 		if err == sql.ErrNoRows {
-			// 如果没有找到，创建新的私聊房间
+			// 创建新的私聊房间
 			tx, err := db.Begin()
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "启动事务失败"})
@@ -85,7 +107,6 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 			}
 			defer tx.Rollback()
 
-			// 创建新房间，添加类型标记
 			result, err := tx.Exec(`
                 INSERT INTO chat_rooms (name, type, created_at) 
                 VALUES (?, 'private', CURRENT_TIMESTAMP)`,
@@ -97,26 +118,21 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 
 			roomID, _ = result.LastInsertId()
 
-			// 将两个用户加入房间
+			// 添加房间成员
 			_, err = tx.Exec(`
-                INSERT INTO room_members (room_id, user_id) 
-                VALUES (?, ?), (?, ?)`,
+                INSERT INTO room_members (room_id, user_id) VALUES (?, ?), (?, ?)`,
 				roomID, userID, roomID, targetUserID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "加入聊天室失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "添加房间成员失败"})
 				return
 			}
 
-			if err = tx.Commit(); err != nil {
+			if err := tx.Commit(); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "提交事务失败"})
 				return
 			}
-		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询聊天室失败"})
-			return
 		}
 
-		// 返回房间ID（无论是新创建的还是已存在的）
 		c.JSON(http.StatusOK, gin.H{
 			"room_id": roomID,
 		})
@@ -273,5 +289,235 @@ func setupChatRoutes(r *gin.Engine, db *sql.DB) {
 			"username":   username,
 			"created_at": createdAt,
 		})
+	})
+
+	// 好友页面路由
+	r.GET("/friends", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.Redirect(http.StatusFound, "/")
+			return
+		}
+
+		c.HTML(http.StatusOK, "friends.html", gin.H{
+			"active":  "friends",
+			"user_id": userID,
+		})
+	})
+
+	// 获取好友列表
+	r.GET("/api/friends", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, []gin.H{})
+			return
+		}
+
+		rows, err := db.Query(`
+			SELECT u.id, u.username, f.created_at
+			FROM friendships f
+			JOIN users u ON f.friend_id = u.id
+			WHERE f.user_id = ? AND f.status = 'accepted'
+			ORDER BY u.username`,
+			userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, []gin.H{})
+			return
+		}
+		defer rows.Close()
+
+		friends := []gin.H{}
+		for rows.Next() {
+			var id int
+			var username, createdAt string
+			if err := rows.Scan(&id, &username, &createdAt); err != nil {
+				c.JSON(http.StatusInternalServerError, []gin.H{})
+				return
+			}
+			friends = append(friends, gin.H{
+				"id":         id,
+				"username":   username,
+				"created_at": createdAt,
+			})
+		}
+
+		c.JSON(http.StatusOK, friends)
+	})
+
+	// 发送好友请求
+	r.POST("/api/friend-request", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		targetUserID := c.PostForm("target_user_id")
+		if targetUserID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "目标用户ID不能为空"})
+			return
+		}
+
+		// 检查是否已经存在好友关系或待处理的请求
+		var exists bool
+		err := db.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM friendships 
+				WHERE (user_id = ? AND friend_id = ?) 
+				   OR (friend_id = ? AND user_id = ?)
+			)`,
+			userID, targetUserID, userID, targetUserID).Scan(&exists)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "验证好友关系失败"})
+			return
+		}
+
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "已经发送过好友请求或已经是好友"})
+			return
+		}
+
+		// 创建好友请求
+		_, err = db.Exec(`
+			INSERT INTO friendships (user_id, friend_id, status, created_at)
+			VALUES (?, ?, 'pending', CURRENT_TIMESTAMP)`,
+			userID, targetUserID)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "发送好友请求失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "好友请求已发送"})
+	})
+
+	// 处理好友请求
+	r.POST("/api/friend-request/:action", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		requestID := c.PostForm("request_id")
+		action := c.Param("action")
+
+		if action != "accept" && action != "reject" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的操作"})
+			return
+		}
+
+		status := "accepted"
+		if action == "reject" {
+			status = "rejected"
+		}
+
+		_, err := db.Exec(`
+			UPDATE friendships 
+			SET status = ?, updated_at = CURRENT_TIMESTAMP
+			WHERE id = ? AND friend_id = ?`,
+			status, requestID, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "处理好友请求失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "好友请求已处理"})
+	})
+
+	// 获取好友请求列表
+	r.GET("/api/friend-requests", func(c *gin.Context) {
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			return
+		}
+
+		// 查询收到的好友请求
+		rows, err := db.Query(`
+			SELECT f.id, u.username, f.created_at
+			FROM friendships f
+			JOIN users u ON f.user_id = u.id
+			WHERE f.friend_id = ? AND f.status = 'pending'
+			ORDER BY f.created_at DESC`,
+			userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, []gin.H{})
+			return
+		}
+		defer rows.Close()
+
+		requests := []gin.H{}
+		for rows.Next() {
+			var id int
+			var username, createdAt string
+			if err := rows.Scan(&id, &username, &createdAt); err != nil {
+				c.JSON(http.StatusInternalServerError, []gin.H{})
+				return
+			}
+			requests = append(requests, gin.H{
+				"id":         id,
+				"username":   username,
+				"created_at": createdAt,
+			})
+		}
+
+		c.JSON(http.StatusOK, requests)
+	})
+
+	// 搜索用户
+	r.GET("/api/search-users", func(c *gin.Context) {
+		session := sessions.Default(c)
+		currentUserID := session.Get("user_id")
+		if currentUserID == nil {
+			c.JSON(http.StatusUnauthorized, []gin.H{})
+			return
+		}
+
+		username := c.Query("username")
+		if username == "" {
+			c.JSON(http.StatusBadRequest, []gin.H{})
+			return
+		}
+
+		// 查询用户，排除自己和已经是好友的用户
+		rows, err := db.Query(`
+			SELECT DISTINCT u.id, u.username
+			FROM users u
+			LEFT JOIN friendships f ON 
+				(f.user_id = ? AND f.friend_id = u.id) OR 
+				(f.friend_id = ? AND f.user_id = u.id)
+			WHERE u.id != ? 
+			AND u.username LIKE ?
+			AND (f.id IS NULL OR f.status = 'rejected')
+			LIMIT 10`,
+			currentUserID, currentUserID, currentUserID, "%"+username+"%")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, []gin.H{})
+			return
+		}
+		defer rows.Close()
+
+		var users []gin.H
+		for rows.Next() {
+			var id int
+			var username string
+			if err := rows.Scan(&id, &username); err != nil {
+				c.JSON(http.StatusInternalServerError, []gin.H{})
+				return
+			}
+			users = append(users, gin.H{
+				"id":       id,
+				"username": username,
+			})
+		}
+
+		c.JSON(http.StatusOK, users)
 	})
 }
