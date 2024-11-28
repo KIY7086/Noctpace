@@ -90,6 +90,7 @@
     box-shadow: var(--glass-shadow);
     border-radius: 16px;
     padding: 30px;
+    animation: scaleIn 0.4s ease;
 }
 
 .settings-section {
@@ -121,6 +122,11 @@
     overflow: hidden;
     border: 3px solid rgba(0, 0, 0, 0.1);
     background: var(--glass-bg);
+    transition: transform 0.3s ease;
+}
+
+.avatar-preview:hover {
+    transform: scale(1.05);
 }
 
 .avatar-preview img {
@@ -158,6 +164,7 @@
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.5);
     font-size: 15px;
+    transition: all 0.3s ease;
 }
 
 .form-group input:focus {
@@ -165,6 +172,7 @@
     border-color: var(--primary-color);
     border-width: 1.5px;
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    transform: translateY(-2px);
 }
 
 .btn-group {

@@ -8,12 +8,16 @@
 :root {
   --primary-color: #4F46E5;
   --primary-hover: #4338CA;
-  --bg-color: #F9FAFB;
-  --sidebar-bg: #111827;
-  --sidebar-hover: #1F2937;
+  --bg-color: #FAFAFA;
+  --nav-bg: #FFFFFF;
+  --nav-hover: #F5F7FF;
+  --nav-text: #6B7280;
+  --nav-text-active: #111827;
+  --nav-border: #F3F4F6;
   --text-primary: #111827;
   --text-secondary: #6B7280;
-  --border-color: #E5E7EB;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
 
 body {
@@ -26,111 +30,213 @@ body {
     height: 100vh;
 }
 
-/* 导航栏样式优化 */
+/* 导航栏样式重写 */
 .nav-sidebar {
     width: 280px;
-    background: var(--sidebar-bg);
-    color: white;
+    background: var(--nav-bg);
     display: flex;
     flex-direction: column;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.1);
+    border-right: 1px solid var(--nav-border);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    z-index: 10;
 }
 
 .nav-header {
-    height: 80px;
+    height: 100px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 20px 24px;
+    position: relative;
 }
 
-.nav-logo {
-    transition: all 0.3s ease;
+.nav-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 24px;
+    right: 24px;
+    height: 1px;
+    background: var(--nav-border);
+}
+
+.nav-logo-container {
+    position: relative;
+    height: 60px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .nav-logo-full {
-    display: block;
-    height: 48px;
+    height: 50px;
     width: auto;
+    object-fit: contain;
+    display: block;
+    max-width: 100%;
 }
 
 .nav-logo-square {
     display: none;
-    height: 32px;
+    height: 42px;
+    width: 42px;
+    object-fit: contain;
 }
 
 .nav-items {
     flex: 1;
-    padding: 24px 16px;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
+/* 现代导航项样式 */
 .nav-item {
     display: flex;
     align-items: center;
     height: 48px;
     padding: 0 16px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--nav-text);
     text-decoration: none;
-    border-radius: 6px;
-    margin-bottom: 8px;
+    border-radius: 12px;
     font-weight: 500;
-    transition: all 0.15s ease;
-    justify-content: flex-start;
+    font-size: 0.9375rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
 }
 
 .nav-item:hover {
-    color: white;
-    background: var(--sidebar-hover);
+    color: var(--nav-text-active);
+    background: var(--nav-hover);
 }
 
 .nav-item.active {
-    color: white;
+    color: var(--primary-color);
+    background: var(--nav-hover);
+    font-weight: 600;
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 25%;
+    height: 50%;
+    width: 3px;
     background: var(--primary-color);
+    border-radius: 0 4px 4px 0;
 }
 
 .nav-item i {
-    width: 20px;
-    margin-right: 16px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
     font-size: 18px;
-    text-align: center;
+    color: currentColor;
+    flex-shrink: 0;
 }
 
+/* 底部导航样式 */
 .nav-footer {
-    padding: 24px 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 20px 16px;
+    margin-top: auto;
+    position: relative;
+}
+
+.nav-footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 24px;
+    right: 24px;
+    height: 1px;
+    background: var(--nav-border);
 }
 
 .nav-footer .nav-item {
-    margin-bottom: 0;
-    color: rgba(255, 255, 255, 0.6);
+    color: #EF4444;  /* 退出按钮使用红色 */
 }
 
 .nav-footer .nav-item:hover {
-    color: white;
+    background: #FEF2F2;
 }
 
-@media (max-width: 768px) {
+/* 移动端优化 */
+@media (max-width: 1024px) {
     .nav-sidebar {
-        width: 240px;
+        width: 72px;
     }
     
     .nav-header {
-        height: 70px;
-        padding: 0 20px;
+        padding: 16px;
+        height: 80px;
     }
     
-    .nav-logo {
-        height: 36px;
+    .nav-logo-container {
+        height: 48px;
+    }
+    
+    .nav-logo-full {
+        display: none;
+    }
+    
+    .nav-logo-square {
+        display: block;
+    }
+    
+    .nav-item {
+        padding: 0;
+        height: 44px;
+        justify-content: center;
+    }
+    
+    .nav-item i {
+        margin: 0;
+        font-size: 20px;
+    }
+    
+    .nav-item span {
+        display: none;
+    }
+    
+    .nav-item.active::before {
+        top: 20%;
+        height: 60%;
     }
 }
 
-/* 主内容区域样式 */
+/* 主内容区域背景 */
 .main-content {
     flex: 1;
-    background: #f8f9fa;
-    overflow-y: auto;
+    background: var(--bg-color);
     position: relative;
+    overflow-y: auto;
+}
+
+/* 美化滚动条 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9CA3AF;
 }
 
 /* 通用按钮样式 */
@@ -141,6 +247,7 @@ body {
     border: none;
     cursor: pointer;
     transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-primary {
@@ -154,22 +261,8 @@ body {
     transform: translateY(-1px);
 }
 
-/* 滚动条美化 */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #555;
+.btn:active {
+    transform: scale(0.95);
 }
 
 /* 响应式设计 */
@@ -210,4 +303,45 @@ body {
 /* 导航项文字样式 */
 .nav-item span {
     transition: opacity 0.2s ease;
+}
+
+/* 全局动画定义 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes bounceIn {
+    0% {
+        transform: scale(0.3);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.8;
+    }
+    70% { transform: scale(0.9); }
+    100% { transform: scale(1); opacity: 1; }
 }

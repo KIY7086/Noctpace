@@ -1,8 +1,10 @@
 {{ define "navbar" }}
 <nav class="nav-sidebar">
     <div class="nav-header">
-        <img src="/static/images/logo.png" alt="Noctpace" class="nav-logo nav-logo-full">
-        <img src="/static/images/logo_square.png" alt="Noctpace" class="nav-logo nav-logo-square">
+        <div class="nav-logo-container">
+            <img src="/static/images/logo.png" alt="Noctpace" class="nav-logo nav-logo-full">
+            <img src="/static/images/logo_square.png" alt="Noctpace" class="nav-logo nav-logo-square">
+        </div>
     </div>
     <div class="nav-items">
         <a href="/" class="nav-item {{ if eq .active "chat" }}active{{ end }}">
