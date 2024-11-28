@@ -32,7 +32,7 @@ body {
 
 /* 导航栏样式重写 */
 .nav-sidebar {
-    width: 280px;
+    width: 220px;
     background: var(--nav-bg);
     display: flex;
     flex-direction: column;
@@ -47,7 +47,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px 24px;
+    padding: 14px 18px;
     position: relative;
 }
 
@@ -71,7 +71,7 @@ body {
 }
 
 .nav-logo-full {
-    height: 50px;
+    height: 62px;
     width: auto;
     object-fit: contain;
     display: block;

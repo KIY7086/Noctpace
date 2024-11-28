@@ -190,6 +190,10 @@
     background: #10B981;
     margin-right: 4px;
     display: inline-block;
+
+    &.offline {
+        background: #F43F5E;
+    }
 }
 
 @media (max-width: 768px) {
@@ -203,11 +207,11 @@
         transition: transform 0.3s ease;
         width: 280px;
         background: #FFFFFF;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     }
     
     .user-list.active {
         transform: translateX(0) !important;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     }
 }
 
@@ -296,7 +300,6 @@
         transition: transform 0.3s ease;
         width: 280px;
         background: #FFFFFF;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     }
     
     .user-list.active {
@@ -494,7 +497,6 @@
 @media (max-width: 768px) {
     .user-list.active {
         transform: translateX(0);
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
         z-index: 1000;
     }
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -31,6 +32,8 @@ var (
 	roomCountMutex  sync.RWMutex
 )
 
+var db *sql.DB // 添加全局变量
+
 type Message struct {
 	Type        string `json:"type"`
 	Content     string `json:"content"`
@@ -38,6 +41,7 @@ type Message struct {
 	Username    string `json:"username"`
 	Timestamp   string `json:"timestamp"`
 	OnlineCount int    `json:"online_count,omitempty"`
+	FriendID    string `json:"friend_id,omitempty"`
 }
 
 func broadcastToRoom(roomID string, message Message) {
@@ -76,7 +80,9 @@ func updateRoomOnlineCount(roomID string) {
 	broadcastToRoom(roomID, message)
 }
 
-func setupWebSocket(r *gin.Engine, db *sql.DB) {
+func setupWebSocket(r *gin.Engine, database *sql.DB) {
+	db = database // 在setup时保存数据库连接
+
 	r.GET("/ws/:room_id", func(c *gin.Context) {
 		roomID := c.Param("room_id")
 		userID := c.Query("user_id")
@@ -264,4 +270,78 @@ func setupWebSocket(r *gin.Engine, db *sql.DB) {
 			updateRoomOnlineCount(roomID)
 		}()
 	})
+}
+
+// 当用户上线/下线时
+func broadcastUserStatus(userID string, online bool) {
+	userMutex.RLock()
+	defer userMutex.RUnlock()
+
+	// 获取该用户的所有好友
+	friends := getFriendsList(userID)
+	for _, friendID := range friends {
+		if conns, exists := userConnections[friendID]; exists {
+			for _, conn := range conns {
+				conn.WriteJSON(Message{
+					Type:     "friend_status",
+					Content:  strconv.FormatBool(online),
+					FriendID: userID,
+				})
+			}
+		}
+	}
+}
+
+// 当好友关系发生变化时
+func broadcastFriendListUpdate(userIDs ...string) {
+	userMutex.RLock()
+	defer userMutex.RUnlock()
+
+	for _, userID := range userIDs {
+		if conns, exists := userConnections[userID]; exists {
+			for _, conn := range conns {
+				conn.WriteJSON(Message{
+					Type: "friend_list_update",
+				})
+			}
+		}
+	}
+}
+
+// 获取用户的好友列表
+func getFriendsList(userID string) []string {
+	// 将 userID 转换为 int
+	uid, err := strconv.Atoi(userID)
+	if err != nil {
+		log.Printf("转换用户ID失败: %v", err)
+		return nil
+	}
+
+	rows, err := db.Query(`
+		SELECT CASE 
+			WHEN user_id = ? THEN friend_id 
+			WHEN friend_id = ? THEN user_id 
+		END as friend_id
+		FROM friendships 
+		WHERE (user_id = ? OR friend_id = ?)
+		AND status = 'accepted'`,
+		uid, uid, uid, uid)
+
+	if err != nil {
+		log.Printf("查询好友列表失败: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var friendIDs []string
+	for rows.Next() {
+		var friendID int
+		if err := rows.Scan(&friendID); err != nil {
+			log.Printf("读取好友ID失败: %v", err)
+			continue
+		}
+		friendIDs = append(friendIDs, strconv.Itoa(friendID))
+	}
+
+	return friendIDs
 }

@@ -38,7 +38,7 @@ func main() {
 	// 添加 WebSocket 支持
 	setupWebSocket(r, db)
 
-	r.Run(":8080")
+	r.Run("0.0.0.0:8080")
 }
 
 // 安全头部中间件

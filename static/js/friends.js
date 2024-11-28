@@ -83,24 +83,31 @@ function loadFriendList() {
                 return;
             }
             
-            friendListContainer.innerHTML = friends.map(friend => `
-                <div class="friend-item" data-friend-id="${friend.id}">
-                    <div class="friend-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <div class="friend-info">
-                        <div class="friend-name">${friend.username}</div>
-                        <div class="friend-meta">
-                            添加于 ${formatTime(friend.created_at)}
+            friendListContainer.innerHTML = friends.map(friend => {
+                // 处理头像显示
+                const avatarHtml = friend.avatar ? 
+                    `<img src="${friend.avatar}" alt="${friend.username}">` : 
+                    `<i class="fas fa-user"></i>`;
+
+                return `
+                    <div class="friend-item" data-friend-id="${friend.id}">
+                        <div class="friend-avatar">
+                            ${avatarHtml}
+                        </div>
+                        <div class="friend-info">
+                            <div class="friend-name">${friend.username}</div>
+                            <div class="friend-meta">
+                                成为好友于 ${formatTime(friend.created_at)}
+                            </div>
+                        </div>
+                        <div class="friend-actions">
+                            <button class="btn btn-primary" onclick="startPrivateChat(${friend.id}, '${friend.username}')">
+                                <i class="fas fa-comment"></i> 发消息
+                            </button>
                         </div>
                     </div>
-                    <div class="friend-actions">
-                        <button class="btn btn-primary" onclick="startPrivateChat(${friend.id}, '${friend.username}')">
-                            <i class="fas fa-comment"></i> 发消息
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         })
         .catch(error => {
             console.error('加载好友列表失败:', error);
@@ -237,13 +244,18 @@ function hideAddFriendModal() {
 // 工具函数
 function formatTime(timestamp) {
     const date = new Date(timestamp);
-    return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
+    const now = new Date();
+    const options = {
         month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+        day: '2-digit'
+    };
+    
+    // 如果不是当前年份，添加年份显示
+    if (date.getFullYear() !== now.getFullYear()) {
+        options.year = 'numeric';
+    }
+    
+    return date.toLocaleDateString('zh-CN', options).replace(/\//g, '-');
 }
 
 function debounce(func, wait) {

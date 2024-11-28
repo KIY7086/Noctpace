@@ -79,14 +79,17 @@ function updateChatHeader(title, onlineCount) {
 }
 
 function joinPublicRoom(saveState = true) {
+    // 移除所有活动状态
     $('.active-room').removeClass('active-room');
     $('.user-item').removeClass('active-user');
     
     currentRoomId = "1";
     currentTargetUser = "公共大厅";
-    $('#targetUser').text("公共大厅");
-    $('#chatArea').show();
     
+    // 更新聊天标题和状态
+    updateChatHeader("公共大厅", 0);  // 初始化在线人数为0
+    
+    $('#chatArea').show();
     $('.public-room').addClass('active-room');
     
     console.log('进入公共大厅，房间ID:', currentRoomId);
@@ -95,8 +98,6 @@ function joinPublicRoom(saveState = true) {
     if (saveState) {
         saveChatState();
     }
-
-    updateChatHeader("公共大厅", "-");
 }
 
 function renderMessage(message) {
@@ -148,7 +149,6 @@ $(document).ready(function() {
         }
     };
 
-    setInterval(loadUsers, 10000);
     loadUsers();
     
     // 页面加载时恢复上次的聊天状态
@@ -186,23 +186,36 @@ function closeUserList() {
 
 // 在开始新的聊天时自动关闭菜单（在移动端）
 function startChat(userId, username, avatar, saveState = true) {
+    console.log('开始私聊:', {
+        userId,
+        username,
+        avatar,
+        currentRoomId: currentRoomId,
+        currentTargetUser: currentTargetUser
+    });
+    
+    // 移除所有活动状态
     $('.active-room').removeClass('active-room');
     $('.user-item').removeClass('active-user');
     
+    // 设置当前聊天状态
     currentRoomId = userId;
     currentTargetUser = username;
     currentTargetAvatar = avatar;
     
-    $(`#user-${userId}`).addClass('active-user');
+    // 添加活动状态类
+    $(`.user-item[data-user-id="${userId}"]`).addClass('active-user');
     $('#chatArea').show();
     
     console.log('开始私聊，目标用户:', username, '房间ID:', userId);
     connectWebSocket(userId);
     
     // 更新聊天标题为私聊对象的用户名
-    updateChatHeader(username, "1");
+    updateChatHeader(username);
     
-    saveChatState();
+    if (saveState) {
+        saveChatState();
+    }
     
     // 在移动端自动关闭菜单
     if (window.innerWidth <= 768) {
@@ -216,5 +229,4 @@ function handleWebSocketMessage(event) {
     if (data.type === 'online_count') {
         document.querySelector('.chat-status .online-count').textContent = data.count;
     }
-    // ... existing message handling code ...
 } 
