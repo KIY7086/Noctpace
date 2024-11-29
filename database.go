@@ -66,6 +66,24 @@ func initDB() *sql.DB {
         UNIQUE(user_id, friend_id)
     )`)
 
+	// 添加触发器来规范化头像路径中的斜线
+	db.Exec(`CREATE TRIGGER IF NOT EXISTS normalize_avatar_path
+        BEFORE INSERT ON users
+        FOR EACH ROW
+        BEGIN
+            UPDATE NEW SET avatar = REPLACE(NEW.avatar, '\', '/');
+        END;
+    `)
+
+	db.Exec(`CREATE TRIGGER IF NOT EXISTS normalize_avatar_path_update
+        BEFORE UPDATE ON users
+        FOR EACH ROW
+        WHEN NEW.avatar IS NOT NULL
+        BEGIN
+            UPDATE NEW SET avatar = REPLACE(NEW.avatar, '\', '/');
+        END;
+    `)
+
 	// 检查公共聊天室是否存在
 	var count int
 	err = db.QueryRow("SELECT COUNT(*) FROM chat_rooms WHERE id = 1").Scan(&count)
